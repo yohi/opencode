@@ -68,5 +68,13 @@ export const Script = {
   get team() {
     return team
   },
+  get scope() {
+    const repo = process.env.GITHUB_REPOSITORY || ""
+    const owner = repo.split("/")[0]
+    if (owner && owner !== "anomalyco") {
+      return `@${owner}/`
+    }
+    return ""
+  },
 }
 console.log(`opencode script`, JSON.stringify(Script, null, 2))

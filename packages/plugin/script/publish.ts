@@ -20,6 +20,9 @@ const pkg = JSON.parse(originalText) as {
 if (await published(pkg.name, pkg.version)) {
   console.log(`already published ${pkg.name}@${pkg.version}`)
 } else {
+  if (Script.scope) {
+    pkg.name = Script.scope + pkg.name.split("/").pop()
+  }
   for (const [key, value] of Object.entries(pkg.exports)) {
     const file = value.replace("./src/", "./dist/").replace(".ts", "")
     // @ts-ignore

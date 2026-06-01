@@ -54,7 +54,7 @@ await Bun.file(`./dist/${pkg.name}/bin/${pkg.name}.exe`).write(
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
     {
-      name: pkg.name + "-ai",
+      name: Script.scope + pkg.name + "-ai",
       bin: {
         [pkg.name]: `./bin/${pkg.name}.exe`,
       },
@@ -72,11 +72,12 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
   ),
 )
 
-const tasks = Object.entries(binaries).map(async ([name]) => {
-  await publish(`./dist/${name}`, name, binaries[name])
+const tasks = Object.entries(binaries).map(async ([scopedName]) => {
+  const dirName = scopedName.replace(Script.scope, "")
+  await publish(`./dist/${dirName}`, scopedName, binaries[scopedName])
 })
 await Promise.all(tasks)
-await publish(`./dist/${pkg.name}`, `${pkg.name}-ai`, version)
+await publish(`./dist/${pkg.name}`, Script.scope + pkg.name + "-ai", version)
 
 const image = "ghcr.io/yohi/opencode"
 const platforms = "linux/amd64,linux/arm64"

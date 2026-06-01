@@ -182,7 +182,8 @@ for (const item of targets) {
   ]
     .filter(Boolean)
     .join("-")
-  console.log(`building ${name}`)
+  const scopedName = Script.scope + name
+  console.log(`building ${name} (as ${scopedName})`)
   await $`mkdir -p dist/${name}/bin`
 
   const localPath = path.resolve(dir, "node_modules/@opentui/core/parser.worker.js")
@@ -243,7 +244,7 @@ for (const item of targets) {
   await Bun.file(`dist/${name}/package.json`).write(
     JSON.stringify(
       {
-        name,
+        name: scopedName,
         version: Script.version,
         preferUnplugged: true,
         os: [item.os],
@@ -253,7 +254,7 @@ for (const item of targets) {
       2,
     ),
   )
-  binaries[name] = Script.version
+  binaries[scopedName] = Script.version
 }
 
 if (Script.release) {

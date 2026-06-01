@@ -34,6 +34,10 @@ function transformExports(exports: Record<string, unknown>) {
 if (await published(pkg.name, pkg.version)) {
   console.log(`already published ${pkg.name}@${pkg.version}`)
 } else {
+  const originalName = pkg.name
+  if (Script.scope) {
+    pkg.name = Script.scope + pkg.name.split("/").pop()
+  }
   pkg.exports = transformExports(pkg.exports)
   await Bun.write("package.json", JSON.stringify(pkg, null, 2))
   try {
