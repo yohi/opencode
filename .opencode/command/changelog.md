@@ -1,5 +1,5 @@
 ---
-model: opencode/claude-opus-4-5
+model: claude-opus-4-5
 ---
 
 Create `UPCOMING_CHANGELOG.md` from the structured changelog input below.
