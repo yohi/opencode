@@ -13,6 +13,7 @@ import { Deferred, Effect, Layer, Schema, Context } from "effect"
 import os from "os"
 import { PermissionV2 } from "@opencode-ai/core/permission"
 import { PermissionID } from "./schema"
+import { Plugin } from "@/plugin"
 
 const log = Log.create({ service: "permission" })
 
@@ -145,6 +146,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const bus = yield* Bus.Service
+    const plugin = yield* Plugin.Service
     const state = yield* InstanceState.make<State>(
       Effect.fn("Permission.state")(function* (ctx) {
         const row = Database.use((db) =>
@@ -198,6 +200,18 @@ export const layer = Layer.effect(
         tool: request.tool,
       }
       log.info("asking", { id, permission: info.permission, patterns: info.patterns })
+
+      const output = { status: "ask" as const }
+      yield* plugin.trigger("permission.ask", info, output)
+
+      if (output.status === "allow") {
+        return
+      }
+      if (output.status === "deny") {
+        return yield* new DeniedError({
+          ruleset: [],
+        })
+      }
 
       const deferred = yield* Deferred.make<void, RejectedError | CorrectedError>()
       pending.set(id, { info, deferred })
@@ -307,6 +321,9 @@ export function disabled(tools: string[], ruleset: Ruleset): Set<string> {
   return PermissionV2.disabled(tools, ruleset)
 }
 
-export const defaultLayer = layer.pipe(Layer.provide(Bus.layer))
+export const defaultLayer = layer.pipe(
+  Layer.provide(Bus.layer),
+  Layer.provide(Plugin.defaultLayer),
+)
 
 export * as Permission from "."
