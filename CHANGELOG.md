@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/yohi/opencode/compare/v1.1.1...v1.1.2) (2026-06-01)
+
+
+### Bug Fixes
+
+* **ci:** add NODE_AUTH_TOKEN to publish job and rename windows upload step ([75b2aa8](https://github.com/yohi/opencode/commit/75b2aa88d9f2ae462c5f9fecd744b9487f0bf19a))
+* **ci:** make electron packaging conditional on signing secrets ([3761a9a](https://github.com/yohi/opencode/commit/3761a9ae7e75d7176e2a69950a9fb5e3e0df914a))
+
 ## [1.1.1](https://github.com/yohi/opencode/compare/v1.1.0...v1.1.1) (2026-06-01)
 
 
