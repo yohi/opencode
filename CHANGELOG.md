@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/yohi/opencode/compare/v1.1.0...v1.1.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **ci:** remove redundant and failing publish job from release-please ([99066b0](https://github.com/yohi/opencode/commit/99066b0d30dc9777bf0b6109cfcfdaf6cd67f35c))
+
 ## [1.1.0](https://github.com/yohi/opencode/compare/v1.0.0...v1.1.0) (2026-06-01)
 
 
