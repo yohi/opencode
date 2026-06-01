@@ -43,8 +43,8 @@ const headerLinks = [
   { href: "#market-share", label: "Market Share" },
 ] as const
 const githubLink = {
-  href: "https://github.com/anomalyco/opencode",
-  apiHref: "https://api.github.com/repos/anomalyco/opencode",
+  href: "https://github.com/yohi/opencode",
+  apiHref: "https://api.github.com/repos/yohi/opencode",
   label: "GitHub",
   fallbackStars: "150K",
   ariaLabel: "Star OpenCode on GitHub",
