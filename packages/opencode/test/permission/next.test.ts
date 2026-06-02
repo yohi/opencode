@@ -5,6 +5,7 @@ import { Bus } from "../../src/bus"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Permission } from "../../src/permission"
 import { PermissionID } from "../../src/permission/schema"
+import { Plugin } from "../../src/plugin"
 import { InstanceBootstrap } from "../../src/project/bootstrap-service"
 import { InstanceStore } from "../../src/project/instance-store"
 import { TestInstance, tmpdirScoped } from "../fixture/fixture"
@@ -14,8 +15,9 @@ import { MessageID, SessionID } from "../../src/session/schema"
 const bus = Bus.layer
 const noopBootstrap = Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))
 const env = Layer.mergeAll(
-  Permission.layer.pipe(Layer.provide(bus)),
+  Permission.layer.pipe(Layer.provide(bus), Layer.provide(Plugin.defaultLayer)),
   bus,
+  Plugin.defaultLayer,
   CrossSpawnSpawner.defaultLayer,
   InstanceStore.defaultLayer.pipe(Layer.provide(noopBootstrap)),
 )

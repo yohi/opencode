@@ -201,7 +201,7 @@ export const layer = Layer.effect(
       }
       log.info("asking", { id, permission: info.permission, patterns: info.patterns })
 
-      const output = { status: "ask" as const }
+      const output: { status: "ask" | "allow" | "deny" } = { status: "ask" }
       yield* plugin.trigger("permission.ask", info, output)
 
       if (output.status === "allow") {
