@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/yohi/opencode/compare/v1.1.2...v1.1.3) (2026-06-02)
+
+
+### Bug Fixes
+
+* **ci:** scope package names for GitHub Packages compatibility ([42c3e82](https://github.com/yohi/opencode/commit/42c3e8228e4d46b0326c49a9afce92874c32b1f3))
+* 型エラーを修正し、テスト環境にPluginレイヤーを追加 ([db9e2dc](https://github.com/yohi/opencode/commit/db9e2dceecddc69b191f862ffbff586d1cf39dd0))
+
 ## [1.1.2](https://github.com/yohi/opencode/compare/v1.1.1...v1.1.2) (2026-06-01)
 
 
