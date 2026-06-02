@@ -195,7 +195,8 @@ for (const item of targets) {
   const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
   const workerRelativePath = path.relative(dir, parserWorker).replaceAll("\\", "/")
 
-  await Bun.build({
+  const result = await Bun.build({
+    target: "bun",
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
     plugins: [plugin],
@@ -227,9 +228,17 @@ for (const item of targets) {
     },
   })
 
+  if (!result.success) {
+    console.error("❌ Build failed with errors:")
+    for (const log of result.logs) {
+      console.error(log)
+    }
+    process.exit(1)
+  }
+
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
-    const binaryPath = `dist/${name}/bin/opencode`
+    const binaryPath = `./dist/${name}/bin/opencode`
     console.log(`Running smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await $`${binaryPath} --version`.text()
