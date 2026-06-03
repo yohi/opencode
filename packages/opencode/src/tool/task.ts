@@ -237,6 +237,9 @@ export const TaskTool = Tool.define(
           .pipe(Effect.ignore, Effect.forkIn(scope, { startImmediately: true }))
       })
 
+      // A running background job can't be awaited synchronously here; resuming it
+      // injects extra context and returns immediately (the original background.wait
+      // still delivers the completion notification).
       if (yield* background.extend({ id: nextSession.id, run: runTask() })) {
         return {
           title: params.description,
