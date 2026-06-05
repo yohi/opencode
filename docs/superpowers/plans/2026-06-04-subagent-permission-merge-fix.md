@@ -18,7 +18,7 @@
 - **evaluate is last-match-wins:** [`packages/core/src/permission.ts:21-31`](../../../packages/core/src/permission.ts) — `rulesets.flat().findLast(...)`. So tool-toggle rules appended last keep priority; default is `ask` when nothing matches.
 - **`input.tools` is deprecated:** [`src/session/prompt.ts:1687-1690`](../../../packages/opencode/src/session/prompt.ts) — "tools and permissions have been merged, you can set permissions on the session itself now." The overwrite is legacy behavior.
 - **Existing test gap:** [`test/tool/task.test.ts:380-429`](../../../packages/opencode/test/tool/task.test.ts) uses `stubOps({ onPrompt })` — it stubs `prompt`, so the real overwrite at `prompt.ts:1236` is never run. [`test/agent/plan-mode-subagent-bypass.test.ts`](../../../packages/opencode/test/agent/plan-mode-subagent-bypass.test.ts) only tests the `deriveSubagentSessionPermission` helper in isolation. Neither catches this bug.
-- **Test harness for the real path:** [`test/session/prompt.test.ts:1-57`](../../../packages/opencode/test/session/prompt.test.ts) already defines `const it = testEffect(makeHttp())` providing `Session.Service` and `SessionPrompt.Service`. `prompt.prompt({ ..., noReply: true })` runs the overwrite (line 1231-1238) and returns at line 1240 **without needing an LLM response**.
+- **Test harness for the real path:** [`test/session/prompt.test.ts:247`](../../../packages/opencode/test/session/prompt.test.ts) already defines `const it = testEffect(makeHttp())` providing `Session.Service` and `SessionPrompt.Service`. `prompt.prompt({ ..., noReply: true })` runs the overwrite (line 1231-1238) and returns at line 1240 **without needing an LLM response**.
 - **`Permission` is already imported** in `prompt.ts` (used at line 394 and line 1223).
 
 ## File Structure
@@ -142,11 +142,20 @@ Replace with:
         permissions.push({ permission: t, action: enabled ? "allow" : "deny", pattern: "*" })
       }
       if (permissions.length > 0) {
-        // input.tools is a deprecated per-message tool toggle. It must layer on
+        // input.tools is a deprecated per-message tool toggle keyed by permission name
+        // (e.g. { edit: false }). It does NOT carry pattern information, so it always
+        // represents a wildcard override for that entire permission name. It must layer on
         // top of the session's existing rules (e.g. a subagent's forwarded
         // external_directory + parent deny rules from deriveSubagentSessionPermission),
         // not replace them. evaluate() is last-match-wins, so appending the
         // toggles keeps them authoritative for their own permission names.
+        //
+        // NOTE: filtering by permission name removes ALL existing rules for that name,
+        // including any fine-grained pattern variants (e.g. { permission: "edit",
+        // pattern: "/safe/*", action: "allow" } alongside { permission: "edit",
+        // pattern: "/sensitive/*", action: "deny" }). This is intentional: input.tools
+        // is a coarse wildcard toggle and callers requiring pattern-level control should
+        // write to session.permission directly instead of using this deprecated field.
         const overridden = new Set(permissions.map((rule) => rule.permission))
         const merged = [
           ...(session.permission ?? []).filter((rule) => !overridden.has(rule.permission)),
