@@ -138,6 +138,10 @@ export const TuiThreadCommand = cmd({
         return
       }
       const cwd = Filesystem.resolve(process.cwd())
+      const config = await TuiConfig.get()
+      const { createTuiRenderer, tui } = await import("./app")
+      const renderer = await createTuiRenderer(config)
+
       const env = sanitizedProcessEnv({
         [OPENCODE_PROCESS_ROLE]: "worker",
         [OPENCODE_RUN_ID]: ensureRunID(),
@@ -187,7 +191,6 @@ export const TuiThreadCommand = cmd({
       }
 
       const prompt = await input(args.prompt)
-      const config = await TuiConfig.get()
 
       const network = resolveNetworkOptionsNoConfig(args)
       const external =
@@ -228,8 +231,6 @@ export const TuiThreadCommand = cmd({
       }, 1000).unref?.()
 
       try {
-        const { createTuiRenderer, tui } = await import("./app")
-        const renderer = await createTuiRenderer(config)
         const handle = tui({
           url: transport.url,
           renderer,

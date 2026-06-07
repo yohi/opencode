@@ -2,11 +2,12 @@ import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
 import * as Log from "@opencode-ai/core/util/log"
 import { Wildcard } from "@opencode-ai/core/util/wildcard"
-import { Deferred, Effect, Layer, Context } from "effect"
+import { Deferred, Effect, Layer, Context, Option } from "effect"
 import os from "os"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
+import { InstanceRef } from "../effect/instance-ref"
 
 const log = Log.create({ service: "permission" })
 
@@ -38,6 +39,16 @@ interface State {
   approved: PermissionV1.Rule[]
 }
 
+const globalPermissionState = (() => {
+  const key = Symbol.for("@opencode/Permission/state")
+  let map = (globalThis as any)[key] as Map<string, State>
+  if (!map) {
+    map = new Map<string, State>()
+    ;(globalThis as any)[key] = map
+  }
+  return map
+})()
+
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
   return (
     rulesets
@@ -56,29 +67,44 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2Bridge.Service
-    const state = yield* InstanceState.make<State>(
-      Effect.fn("Permission.state")(function* (ctx) {
-        void ctx
-        const state = {
+    const myPending = new Set<PermissionV1.ID>()
+
+    const getPermissionState = Effect.gen(function* () {
+      const ref = yield* Effect.serviceOption(InstanceRef)
+      const key = Option.match(ref, {
+        onNone: () => "",
+        onSome: (val) => {
+          const projectID = val?.project?.id
+          return projectID && projectID !== "global" ? projectID : (val?.directory ?? "")
+        },
+      })
+      let state = globalPermissionState.get(key)
+      if (!state) {
+        state = {
           pending: new Map<PermissionV1.ID, PendingEntry>(),
           approved: [],
         }
+        globalPermissionState.set(key, state)
+      }
+      return state
+    })
 
-        yield* Effect.addFinalizer(() =>
-          Effect.gen(function* () {
-            for (const item of state.pending.values()) {
-              yield* Deferred.fail(item.deferred, new PermissionV1.RejectedError())
-            }
-            state.pending.clear()
-          }),
-        )
-
-        return state
-      }),
+    yield* Effect.addFinalizer(() =>
+      Effect.gen(function* () {
+        const state = yield* getPermissionState
+        for (const id of myPending) {
+          const item = state.pending.get(id)
+          if (item) {
+            yield* Deferred.fail(item.deferred, new PermissionV1.RejectedError())
+            state.pending.delete(id)
+          }
+        }
+        myPending.clear()
+      })
     )
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
-      const { approved, pending } = yield* InstanceState.get(state)
+      const { approved, pending } = yield* getPermissionState
       const { ruleset, ...request } = input
       let needsAsk = false
 
@@ -110,17 +136,19 @@ export const layer = Layer.effect(
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
       pending.set(id, { info, deferred })
+      myPending.add(id)
       yield* events.publish(Event.Asked, info)
       return yield* Effect.ensuring(
         Deferred.await(deferred),
         Effect.sync(() => {
           pending.delete(id)
+          myPending.delete(id)
         }),
       )
     })
 
     const reply = Effect.fn("Permission.reply")(function* (input: PermissionV1.ReplyInput) {
-      const { approved, pending } = yield* InstanceState.get(state)
+      const { approved, pending } = yield* getPermissionState
       const existing = pending.get(input.requestID)
       if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
 
@@ -166,7 +194,7 @@ export const layer = Layer.effect(
       for (const [id, item] of pending.entries()) {
         if (item.info.sessionID !== existing.info.sessionID) continue
         const ok = item.info.patterns.every(
-          (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
+          (pattern: string) => evaluate(item.info.permission, pattern, approved).action === "allow",
         )
         if (!ok) continue
         pending.delete(id)
@@ -180,8 +208,8 @@ export const layer = Layer.effect(
     })
 
     const list = Effect.fn("Permission.list")(function* () {
-      const pending = (yield* InstanceState.get(state)).pending
-      return Array.from(pending.values(), (item) => item.info)
+      const pending = (yield* getPermissionState).pending
+      return Array.from(pending.values(), (item: PendingEntry) => item.info)
     })
 
     return Service.of({ ask, reply, list })
