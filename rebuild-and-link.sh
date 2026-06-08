@@ -20,6 +20,9 @@ fi
 # 2. シンボリックリンクの更新
 echo "🔗 Updating symbolic link..."
 
+# ターゲットディレクトリの作成
+mkdir -p "$(dirname "$LINK_PATH")"
+
 # 既存のファイルがシンボリックリンクでない（実体ファイルである）場合はバックアップ
 if [ -f "$LINK_PATH" ] && [ ! -L "$LINK_PATH" ]; then
   mv "$LINK_PATH" "${LINK_PATH}.bak"
