@@ -2389,3 +2389,59 @@ noLLMServer.instance(
     }),
   30_000,
 )
+
+noLLMServer.instance(
+  "[regression] prompt merges input.tools into session.permission instead of overwriting it",
+  () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const prompt = yield* SessionPrompt.Service
+
+      // Mirror a subagent session created by task.ts: it carries forwarded
+      // parent restrictions that MUST survive the prompt call.
+      //  - external_directory allow: a previously-approved external path
+      //  - edit deny: the Plan-Mode hard restriction (#26514)
+      const session = yield* sessions.create({
+        title: "subagent",
+        permission: [
+          { permission: "external_directory", pattern: "/outside/*", action: "allow" },
+          { permission: "edit", pattern: "*", action: "deny" },
+          { permission: "task", pattern: "*", action: "deny" },
+        ],
+      })
+
+      // task.ts re-asserts tool toggles via the deprecated input.tools field.
+      // noReply:true exercises the permission write (prompt.ts ~1223) and
+      // returns before any LLM turn.
+      yield* prompt.prompt({
+        sessionID: session.id,
+        agent: "build",
+        model: ref,
+        noReply: true,
+        tools: { task: false, todowrite: false },
+        parts: [{ type: "text", text: "hello" }],
+      })
+
+      const updated = yield* sessions.get(session.id)
+
+      // Forwarded rules survive (the bug dropped these).
+      expect(updated.permission).toContainEqual({
+        permission: "external_directory",
+        pattern: "/outside/*",
+        action: "allow",
+      })
+      expect(updated.permission).toContainEqual({ permission: "edit", pattern: "*", action: "deny" })
+
+      // input.tools toggles are applied.
+      expect(updated.permission).toContainEqual({ permission: "task", pattern: "*", action: "deny" })
+      expect(updated.permission).toContainEqual({
+        permission: "todowrite",
+        pattern: "*",
+        action: "deny",
+      })
+
+      // No duplicate "task" rule from a naive concat-merge.
+      expect(updated.permission?.filter((rule) => rule.permission === "task")).toHaveLength(1)
+    }),
+  { config: cfg },
+)

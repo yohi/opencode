@@ -1233,8 +1233,27 @@ export const layer = Layer.effect(
         permissions.push({ permission: t, action: enabled ? "allow" : "deny", pattern: "*" })
       }
       if (permissions.length > 0) {
-        session.permission = permissions
-        yield* sessions.setPermission({ sessionID: session.id, permission: permissions })
+        // input.tools is a deprecated per-message tool toggle keyed by permission name
+        // (e.g. { edit: false }). It does NOT carry pattern information, so it always
+        // represents a wildcard override for that entire permission name. It must layer on
+        // top of the session's existing rules (e.g. a subagent's forwarded
+        // external_directory + parent deny rules from deriveSubagentSessionPermission),
+        // not replace them. evaluate() is last-match-wins, so appending the
+        // toggles keeps them authoritative for their own permission names.
+        //
+        // NOTE: filtering by permission name removes ALL existing rules for that name,
+        // including any fine-grained pattern variants (e.g. { permission: "edit",
+        // pattern: "/safe/*", action: "allow" } alongside { permission: "edit",
+        // pattern: "/sensitive/*", action: "deny" }). This is intentional: input.tools
+        // is a coarse wildcard toggle and callers requiring pattern-level control should
+        // write to session.permission directly instead of using this deprecated field.
+        const overridden = new Set(permissions.map((rule) => rule.permission))
+        const merged = [
+          ...(session.permission ?? []).filter((rule) => !overridden.has(rule.permission)),
+          ...permissions,
+        ]
+        session.permission = merged
+        yield* sessions.setPermission({ sessionID: session.id, permission: merged })
       }
 
       if (input.noReply === true) return message

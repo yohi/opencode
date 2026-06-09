@@ -539,14 +539,31 @@ export const layer = Layer.effect(
             }
 
             const agent = yield* agents.get(ctx.assistantMessage.agent)
-            yield* permission.ask({
-              permission: "doom_loop",
-              patterns: [value.name],
-              sessionID: ctx.assistantMessage.sessionID,
-              metadata: { tool: value.name, input },
-              always: [value.name],
-              ruleset: agent.permission,
-            })
+            const res = yield* Effect.exit(
+              permission.ask({
+                permission: "doom_loop",
+                patterns: [value.name],
+                sessionID: ctx.assistantMessage.sessionID,
+                metadata: { tool: value.name, input },
+                always: [value.name],
+                ruleset: agent.permission,
+              }),
+            )
+            if (Exit.isFailure(res)) {
+              const error = Cause.squash(res.cause)
+              if (
+                error instanceof PermissionV1.RejectedError ||
+                error instanceof PermissionV1.CorrectedError ||
+                error instanceof PermissionV1.DeniedError
+              ) {
+                yield* failToolCall(value.id, error)
+                // doom_loop is a loop-breaker: rejecting it always stops the run,
+                // regardless of experimental.continue_loop_on_deny.
+                ctx.blocked = true
+                return
+              }
+              return yield* Effect.failCause(res.cause)
+            }
             return
           }
 
