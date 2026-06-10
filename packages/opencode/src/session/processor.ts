@@ -238,7 +238,11 @@ export const layer = Layer.effect(
             time: { start: match.part.state.time.start, end: Date.now() },
           },
         })
-        if (error instanceof PermissionV1.RejectedError || error instanceof Question.RejectedError) {
+        if (
+          error instanceof PermissionV1.RejectedError ||
+          error instanceof PermissionV1.DeniedError ||
+          error instanceof Question.RejectedError
+        ) {
           ctx.blocked = ctx.shouldBreak
         }
         yield* settleToolCall(toolCallID)
@@ -535,14 +539,27 @@ export const layer = Layer.effect(
             }
 
             const agent = yield* agents.get(ctx.assistantMessage.agent)
-            yield* permission.ask({
-              permission: "doom_loop",
-              patterns: [value.name],
-              sessionID: ctx.assistantMessage.sessionID,
-              metadata: { tool: value.name, input },
-              always: [value.name],
-              ruleset: agent.permission,
-            })
+            const res = yield* Effect.exit(
+              permission.ask({
+                permission: "doom_loop",
+                patterns: [value.name],
+                sessionID: ctx.assistantMessage.sessionID,
+                metadata: { tool: value.name, input },
+                always: [value.name],
+                ruleset: agent.permission,
+              }),
+            )
+            if (Exit.isFailure(res)) {
+              const error = Cause.squash(res.cause)
+              // A denied/rejected doom_loop prompt marks the tool call as errored and
+              // stops the loop the same way other permission rejections do, honoring
+              // `continue_loop_on_deny` via failToolCall (ctx.blocked = ctx.shouldBreak).
+              if (error instanceof PermissionV1.RejectedError || error instanceof PermissionV1.DeniedError) {
+                yield* failToolCall(value.id, error)
+                return
+              }
+              return yield* Effect.failCause(res.cause)
+            }
             return
           }
 
