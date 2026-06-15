@@ -55,7 +55,6 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2Bridge.Service
-    const plugin = yield* Plugin.Service
     const state = yield* InstanceState.make<State>(
       Effect.fn("Permission.state")(function* (ctx) {
         void ctx
@@ -108,11 +107,12 @@ export const layer = Layer.effect(
       }
       yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
 
+      const plugin = yield* Plugin.Service
       const output: { status: "ask" | "allow" | "deny" } = { status: "ask" }
       const hookInfo = { ...info, patterns: [...info.patterns], metadata: { ...info.metadata }, always: [...info.always] }
       yield* plugin.trigger("permission.ask", hookInfo, output).pipe(
         Effect.catchCause((cause) => {
-          log.error("Plugin failed during permission.ask hook, falling back to ask", { cause })
+          Effect.logError("Plugin failed during permission.ask hook, falling back to ask", { cause })
           return Effect.sync(() => {
             output.status = "ask"
           })
