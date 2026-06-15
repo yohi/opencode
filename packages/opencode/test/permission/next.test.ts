@@ -45,6 +45,7 @@ const env = Layer.mergeAll(
   events,
   CrossSpawnSpawner.defaultLayer,
   InstanceStore.defaultLayer.pipe(Layer.provide(noopBootstrap)),
+  mockPluginLayer,
 )
 const it = testEffect(env)
 
