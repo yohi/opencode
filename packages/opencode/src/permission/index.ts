@@ -2,7 +2,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
 import { Wildcard } from "@opencode-ai/core/util/wildcard"
-import { Deferred, Effect, Layer, Context } from "effect"
+import { Deferred, Effect, Layer, Context, Cause } from "effect"
 import os from "os"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -107,27 +107,31 @@ export const layer = Layer.effect(
       }
       yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
 
-      const plugin = yield* Plugin.Service
-      const output: { status: "ask" | "allow" | "deny" } = { status: "ask" }
-      const hookInfo = { ...info, patterns: [...info.patterns], metadata: { ...info.metadata }, always: [...info.always] }
-      yield* plugin.trigger("permission.ask", hookInfo, output).pipe(
-        Effect.catchCause((cause) => {
-          Effect.logError("Plugin failed during permission.ask hook, falling back to ask", { cause })
-          return Effect.sync(() => {
-            output.status = "ask"
-          })
-        }),
-      )
+      const pluginOpt = yield* Effect.serviceOption(Plugin.Service)
+      if (pluginOpt._tag === "Some") {
+        const plugin = pluginOpt.value
+        const output: { status: "ask" | "allow" | "deny" } = { status: "ask" }
+        const hookInfo = { ...info, patterns: [...info.patterns], metadata: { ...info.metadata }, always: [...info.always] }
+        yield* plugin.trigger("permission.ask", hookInfo, output).pipe(
+          Effect.catchCause((cause) => {
+            if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause)
+            Effect.logError("Plugin failed during permission.ask hook, falling back to ask", { cause })
+            return Effect.sync(() => {
+              output.status = "ask"
+            })
+          }),
+        )
 
-      if (output.status === "allow") {
-        return
-      }
-      if (output.status === "deny") {
-        // When a plugin denies a request, it's not based on the user's config ruleset,
-        // so we intentionally pass an empty array here.
-        return yield* new PermissionV1.DeniedError({
-          ruleset: [],
-        })
+        if (output.status === "allow") {
+          return
+        }
+        if (output.status === "deny") {
+          // When a plugin denies a request, it's not based on the user's config ruleset,
+          // so we intentionally pass an empty array here.
+          return yield* new PermissionV1.DeniedError({
+            ruleset: [],
+          })
+        }
       }
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
