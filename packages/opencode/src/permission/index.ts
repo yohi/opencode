@@ -113,13 +113,13 @@ export const layer = Layer.effect(
         const output: { status: "ask" | "allow" | "deny" } = { status: "ask" }
         const hookInfo = { ...info, patterns: [...info.patterns], metadata: { ...info.metadata }, always: [...info.always] }
         yield* plugin.trigger("permission.ask", hookInfo, output).pipe(
-          Effect.catchCause((cause) => {
-            if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause)
-            Effect.logError("Plugin failed during permission.ask hook, falling back to ask", { cause })
-            return Effect.sync(() => {
+          Effect.catchCause((cause) =>
+            Effect.gen(function* () {
+              if (Cause.hasInterruptsOnly(cause)) return yield* Effect.failCause(cause)
+              yield* Effect.logError("Plugin failed during permission.ask hook, falling back to ask", { cause })
               output.status = "ask"
-            })
-          }),
+            }),
+          ),
         )
 
         if (output.status === "allow") {

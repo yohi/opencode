@@ -41,7 +41,7 @@ const mockPluginLayer = Layer.succeed(
 const events = EventV2Bridge.defaultLayer
 const noopBootstrap = Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))
 const env = Layer.mergeAll(
-  Permission.layer.pipe(Layer.provide(Database.defaultLayer), Layer.provide(events), Layer.provide(mockPluginLayer)),
+  Permission.layer.pipe(Layer.provide(Database.defaultLayer), Layer.provide(events)),
   events,
   CrossSpawnSpawner.defaultLayer,
   InstanceStore.defaultLayer.pipe(Layer.provide(noopBootstrap)),
