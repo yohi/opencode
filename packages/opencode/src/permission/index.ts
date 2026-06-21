@@ -2,11 +2,12 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
 import { Wildcard } from "@opencode-ai/core/util/wildcard"
-import { Deferred, Effect, Layer, Context } from "effect"
+import { Deferred, Effect, Layer, Context, Cause } from "effect"
 import os from "os"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
+import { Plugin } from "@/plugin"
 
 export const Event = {
   Asked: EventV2.define({ type: "permission.asked", schema: PermissionV1.Request.fields }),
@@ -105,6 +106,33 @@ export const layer = Layer.effect(
         tool: request.tool,
       }
       yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
+
+      const pluginOpt = yield* Effect.serviceOption(Plugin.Service)
+      if (pluginOpt._tag === "Some") {
+        const plugin = pluginOpt.value
+        const output: { status: "ask" | "allow" | "deny" } = { status: "ask" }
+        const hookInfo = { ...info, patterns: [...info.patterns], metadata: { ...info.metadata }, always: [...info.always] }
+        yield* plugin.trigger("permission.ask", hookInfo, output).pipe(
+          Effect.catchCause((cause) =>
+            Effect.gen(function* () {
+              if (Cause.hasInterruptsOnly(cause)) return yield* Effect.failCause(cause)
+              yield* Effect.logError("Plugin failed during permission.ask hook, falling back to ask", { cause })
+              output.status = "ask"
+            }),
+          ),
+        )
+
+        if (output.status === "allow") {
+          return
+        }
+        if (output.status === "deny") {
+          // When a plugin denies a request, it's not based on the user's config ruleset,
+          // so we intentionally pass an empty array here.
+          return yield* new PermissionV1.DeniedError({
+            ruleset: [],
+          })
+        }
+      }
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
       pending.set(id, { info, deferred })
@@ -223,7 +251,10 @@ export function disabled(tools: string[], ruleset: PermissionV1.Ruleset): Set<st
   )
 }
 
-export const defaultLayer = layer.pipe(Layer.provide(EventV2Bridge.defaultLayer))
+export const defaultLayer = layer.pipe(
+  Layer.provide(EventV2Bridge.defaultLayer),
+  Layer.provide(Plugin.defaultLayer)
+)
 
 export const node = LayerNode.make(layer, [EventV2Bridge.node])
 

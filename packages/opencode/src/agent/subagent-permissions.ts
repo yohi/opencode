@@ -3,12 +3,12 @@ import type { Agent } from "./agent"
 
 /**
  * Build the `permission` ruleset for a subagent's session when it's spawned
- * via the task tool. Combines:
+ * via the task tool. Combines rules in order of increasing priority (later rules override earlier ones):
  *
- * 1. The parent session's deny rules and external_directory rules.
- *    Parent agent restrictions only govern that agent; the subagent's own
- *    permissions determine its capabilities.
- * 2. Default `todowrite` and `task` denies if the subagent's own ruleset
+ * 1. The subagent's own configured permissions.
+ * 2. The parent session's deny rules and external_directory rules.
+ *    These act as a security ceiling, ensuring a subagent cannot bypass restrictions placed on the parent.
+ * 3. Default `todowrite` and `task` denies if the subagent's own ruleset
  *    doesn't already permit them.
  */
 export function deriveSubagentSessionPermission(input: {
@@ -18,6 +18,7 @@ export function deriveSubagentSessionPermission(input: {
   const canTask = input.subagent.permission.some((rule) => rule.permission === "task")
   const canTodo = input.subagent.permission.some((rule) => rule.permission === "todowrite")
   return [
+    ...input.subagent.permission,
     ...input.parentSessionPermission.filter(
       (rule) => rule.permission === "external_directory" || rule.action === "deny",
     ),
